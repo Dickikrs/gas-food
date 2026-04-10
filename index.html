@@ -99,9 +99,11 @@
 </div>
 
 <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbzx0XtCh0IIGoauJPXotReAboYYYKnvympmzJTTIH47gRWnZHqplYrobnDYczdxLI2iOg/exec"; 
+    // PENTING: Gunakan URL dari Deployment TERBARU
+    const API_URL = "https://script.google.com/macros/s/AKfycbyIt7EunNVefY1wQHSrk2y7VYaoG-lasR0LzLPBMzXZNhRhQb8kAqy5jRIYFv3k-0xKhQ/exec"; 
     const NOMOR_ADMIN = "6289623373483"; 
     let currentMode = "";
+    let globalPass = ""; // Untuk menyimpan password saat absen
 
     function showPage(mode) {
         currentMode = mode;
@@ -139,6 +141,7 @@
         window.location.href = `https://api.whatsapp.com/send?phone=${NOMOR_ADMIN}&text=${teksPesan}`;
     }
 
+    // --- LOGIKA SLIDER GPS ---
     const handle = document.getElementById('handle');
     const slider = document.getElementById('slider-gps');
     const label = document.getElementById('slider-label');
@@ -163,37 +166,48 @@
     document.addEventListener('mouseup', onEnd);
     document.addEventListener('touchend', onEnd);
 
+    // --- FUNGSI KIRIM DATA (LOGIN/DAFTAR) ---
     function gasKirim() {
         const wa = document.getElementById('wa').value;
         const btn = document.getElementById('btn-submit');
         
-        // Cek input password berdasarkan mode
-        let ps = "";
-        if (currentMode === 'LOGIN') {
-            ps = document.getElementById('pass').value;
-        } else {
-            ps = document.getElementById('pass_daftar').value;
-        }
+        let ps = (currentMode === 'LOGIN') ? document.getElementById('pass').value : document.getElementById('pass_daftar').value;
+        globalPass = ps; // Simpan untuk keperluan absen nanti
 
         if(!wa) return alert("Nomor WA wajib diisi!");
         if(!ps) return alert("Password wajib diisi!");
         
-        btn.disabled = true; btn.innerText = "PROSES...";
+        btn.disabled = true; btn.innerText = "MENYAMBUNGKAN...";
 
         const payload = { 
-            type: currentMode, wa: wa, pass: ps, 
+            type: currentMode, 
+            wa: wa, 
+            pass: ps, 
             nama: document.getElementById('nama').value || "", 
             motor: document.getElementById('motor').value || "", 
             alamat: document.getElementById('alamat').value || "" 
         };
 
-        fetch(API_URL, { method: "POST", body: JSON.stringify(payload) })
-        .then(r => r.text()).then(res => {
+        // Menggunakan fetch POST ke Google Apps Script
+        fetch(API_URL, { 
+            method: "POST", 
+            body: JSON.stringify(payload) 
+        })
+        .then(r => r.text())
+        .then(res => {
             if(res.includes("Sukses")) {
                 if(currentMode === 'DAFTAR') tampilHalamanVerifikasi(payload);
                 else tampilDashboard(res, payload);
-            } else { alert(res); btn.disabled = false; btn.innerText = "KONFIRMASI"; }
-        }).catch(() => { alert("Koneksi gagal!"); btn.disabled = false; btn.innerText = "KONFIRMASI"; });
+            } else { 
+                alert(res); 
+                btn.disabled = false; btn.innerText = "KONFIRMASI"; 
+            }
+        })
+        .catch(err => { 
+            console.error(err);
+            alert("Koneksi Gagal! Pastikan URL Apps Script Benar & Izin 'Anyone' sudah AKTIF."); 
+            btn.disabled = false; btn.innerText = "KONFIRMASI"; 
+        });
     }
 
     function tampilHalamanVerifikasi(data) {
@@ -203,12 +217,13 @@
                           `📱 *WA:* ${data.wa}\n` +
                           `🛵 *Unit/Plat:* ${data.motor}\n` +
                           `🏠 *Alamat:* ${data.alamat}\n\n` +
-                          `_Mohon segera diaktifkan akun saya. Terima kasih!_`;
+                          `_Mohon segera diaktifkan akun saya agar bisa mulai narik. Terima kasih!_
+_Note: Jangan ubah pesan ini !!!!!_`;
 
         document.getElementById('form-content').innerHTML = `
             <div class="text-center p-2"><i class="fa-solid fa-user-clock fa-4x text-warning mb-4"></i>
             <h5 class="fw-bold">Data Terkirim!</h5>
-            <p class="text-white-50 small mb-4">Silakan klik tombol di bawah untuk kirim data ke Admin agar akun segera diaktifkan.</p>
+            <p class="text-white-50 small mb-4">Akun kamu sedang menunggu aktivasi. Klik tombol di bawah untuk lapor ke Admin.</p>
             <a href="https://api.whatsapp.com/send?phone=${NOMOR_ADMIN}&text=${window.encodeURIComponent(teksLengkap)}" class="btn btn-success w-100 py-3 fw-bold rounded-pill mb-3">
                <i class="fa-brands fa-whatsapp me-2"></i> KIRIM DATA KE WA ADMIN
             </a>
@@ -222,6 +237,7 @@
         document.getElementById('motor-display').innerText = info[2] || "-";
         document.getElementById('rating-display').innerText = info[3] || "0.0";
         document.getElementById('user-img').src = `https://ui-avatars.com/api/?name=${info[1]}&background=EE4D2D&color=fff&size=100`;
+        
         document.getElementById('page-form').classList.add('hidden');
         document.getElementById('ui-header').classList.add('hidden');
         document.getElementById('page-dash').classList.remove('hidden');
@@ -229,21 +245,36 @@
 
     function updateGps() {
         handle.style.background = "#2ecc71";
-        label.innerText = "MENYINKRONKAN...";
+        label.innerText = "MENGIRIM LOKASI...";
+        
         navigator.geolocation.getCurrentPosition(pos => {
             const pay = { 
                 type: "ABSEN", 
                 wa: document.getElementById('wa').value, 
-                pass: (currentMode === 'LOGIN' ? document.getElementById('pass').value : document.getElementById('pass_daftar').value), 
+                pass: globalPass, 
                 lat: pos.coords.latitude, 
                 lng: pos.coords.longitude 
             };
-            fetch(API_URL, { method: "POST", body: JSON.stringify(pay) }).then(() => { 
+            
+            fetch(API_URL, { method: "POST", body: JSON.stringify(pay) })
+            .then(() => { 
                 document.getElementById('badge-aktif').style.display = 'block';
                 label.innerText = "GPS TERKUNCI ✓";
-                setTimeout(() => { handle.style.left = '5px'; handle.style.background = "#EE4D2D"; label.innerText = "GESER UNTUK UPDATE GPS"; }, 2000);
+                setTimeout(() => { 
+                    handle.style.left = '5px'; 
+                    handle.style.background = "#EE4D2D"; 
+                    label.innerText = "GESER UNTUK UPDATE GPS"; 
+                }, 2000);
+            })
+            .catch(() => {
+                alert("Gagal update ke server!");
+                handle.style.left = '5px';
             });
-        }, () => { alert("Gagal GPS!"); handle.style.left = '5px'; });
+        }, (err) => { 
+            alert("Gagal ambil GPS! Aktifkan Lokasi HP."); 
+            handle.style.left = '5px'; 
+            label.innerText = "GESER UNTUK UPDATE GPS";
+        });
     }
 </script>
 </body>
